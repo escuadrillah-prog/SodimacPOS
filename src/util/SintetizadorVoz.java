@@ -1,49 +1,73 @@
 package util;
 
-import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
-/**
- * Permite que el archivo JAR hable fisicamente en Windows (POSReady 7 / 7 / 10 / 11)
- * usando el motor nativo SAPI.SpVoice de Windows sin librerias externas pesadas.
- */
 public class SintetizadorVoz {
-    private static boolean silenciado = false;
 
-    public static void alternarSilencio() {
-        silenciado = !silenciado;
+    private static boolean silenciado = false;
+    private static Process procesoActual = null;
+
+    public static void setSilenciado(boolean estado) {
+        silenciado = estado;
+        if (silenciado) {
+            detener();
+        }
     }
 
     public static boolean isSilenciado() {
         return silenciado;
     }
 
+    public static boolean alternarSilencio() {
+        setSilenciado(!silenciado);
+        return silenciado;
+    }
+
+    public static void detener() {
+        if (procesoActual != null && procesoActual.isAlive()) {
+            procesoActual.destroyForcibly();
+        }
+    }
+
     public static void hablar(final String texto) {
         if (silenciado || texto == null || texto.trim().isEmpty()) {
             return;
         }
-        // Ejecutar en un hilo separado para no congelar la interfaz tactil JFrame
-        Thread hiloVoz = new Thread(new Runnable() {
+
+        detener();
+
+        new Thread(new Runnable() {
             @Override
             public void run() {
-                String limpio = texto.replace("\"", " ").replace("'", " ");
-                String os = System.getProperty("os.name").toLowerCase();
                 try {
-                    if (os.contains("win")) {
-                        // Comando nativo Windows (funciona en POSReady 7 con PowerShell / mshta VBScript)
-                        String vbs = "mshta vbscript:Execute(\"CreateObject(\\\"SAPI.SpVoice\\\").Speak(\\\"" + limpio + "\\\"):window.close\")";
-                        Runtime.getRuntime().exec(vbs);
-                    } else if (os.contains("mac")) {
-                        Runtime.getRuntime().exec(new String[]{"say", limpio});
-                    } else {
-                        // Linux (espeak / spd-say)
-                        Runtime.getRuntime().exec(new String[]{"espeak", "-v", "es", limpio});
-                    }
-                } catch (IOException ex) {
-                    System.out.println("[VOZ POS]: " + texto);
+                    String textoLimpio = texto.replace("\"", "").replace("'", "");
+                    String script =
+                        "Add-Type -AssemblyName System.Speech; " +
+                        "$voz = New-Object System.Speech.Synthesis.SpeechSynthesizer; " +
+                        "$vozEs = $voz.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like 'es-*' -and $_.VoiceInfo.Gender -eq 'Female' } | Select-Object -First 1; " +
+                        "if (-not $vozEs) { $vozEs = $voz.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like 'es-*' } | Select-Object -First 1 }; " +
+                        "if ($vozEs) { $voz.SelectVoice($vozEs.VoiceInfo.Name) }; " +
+                        "$voz.Rate = -1; " +
+                        "$voz.Volume = 100; " +
+                        "$voz.Speak('" + textoLimpio + "');";
+
+                    byte[] bytes = script.getBytes(StandardCharsets.UTF_16LE);
+                    String encodedCommand = Base64.getEncoder().encodeToString(bytes);
+
+                    ProcessBuilder pb = new ProcessBuilder(
+                        "powershell.exe",
+                        "-NoProfile",
+                        "-NonInteractive",
+                        "-WindowStyle", "Hidden",
+                        "-EncodedCommand", encodedCommand
+                    );
+                    procesoActual = pb.start();
+                    procesoActual.waitFor();
+                } catch (Exception e) {
+                    System.err.println("Error en SintetizadorVoz: " + e.getMessage());
                 }
             }
-        });
-        hiloVoz.setDaemon(true);
-        hiloVoz.start();
+        }).start();
     }
 }

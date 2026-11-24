@@ -155,7 +155,7 @@ public class ControladorPOS implements ActionListener {
         } else if (src == vista.vistaEscaneo.btnTarjetaSocio) {
             vista.vistaRutSocio.txtRut.setText("");
             vista.mostrarPantalla("RUT_SOCIO");
-            SintetizadorVoz.hablar("Ingrese su RUT y acumule CMR puntos.");
+            SintetizadorVoz.hablar("Ingrese su RUT ");
         } else if (src == vista.vistaEscaneo.btnAnular) {
             int fila = vista.vistaEscaneo.tablaProductos.getSelectedRow();
             if (fila < 0) {
@@ -202,7 +202,7 @@ public class ControladorPOS implements ActionListener {
             String rut = vista.vistaRutSocio.txtRut.getText().trim();
             if (rut.length() >= 7) {
                 socioActivo = rut;
-                SintetizadorVoz.hablar("RUT registrado correctamente.");
+                SintetizadorVoz.hablar("La Cuenta De Comprador Frecuete esta Activada");
                 JOptionPane.showMessageDialog(vista, "Socio CMR registrado: " + socioActivo);
                 vista.mostrarPantalla("ESCANEO");
             } else {
